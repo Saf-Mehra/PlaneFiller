@@ -1,0 +1,167 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jun  3 12:01:00 2023
+
+@author: arun_
+"""
+
+import turtle
+import math
+import copy
+import numpy as np
+import matplotlib.pyplot as plt
+
+def multiply_matrix(A,B):
+    global C
+    if  np.shape(A)[1] == np.shape(B)[0]:
+        C = np.zeros((np.shape(A)[0],np.shape(B)[1]))
+        for i in range(len(A)):
+            for j in range(len(B[0])):
+                for k in range(len(B)):
+                    C[i][j] += A[i][k] * B[k][j]
+    return C
+
+#define level 1 of the fractal as described in "Brain-filling Curves" by Jeffrey Ventrella
+fractal_gen = [[[1,0],[1,-1]],
+               [[0,1],[1,1]]]
+
+
+#List of the cartesian [[0,0]coords of each node of the fractal
+fractal_coords = [[[0,0]],[[1,0]],[[1,1]]]
+original_x = []
+original_y = []
+for xys in fractal_coords:
+    original_x.append(xys[0][0])
+    original_y.append(xys[0][1])
+
+plt.scatter(original_x,original_y)
+plt.plot(original_x,original_y)
+
+
+
+
+def distance_of_coords(coord_0,coord_1):
+    return ((coord_0[0]-coord_1[0])**2+(coord_0[1]-coord_1[1])**2)**(1/2)
+
+#Find the distance between the two endpoints of the fractal
+def endpoints_distance(coords):
+    distance = distance_of_coords(coords[0][0], coords[-1][0])
+    return distance
+
+#Find the degree (from horizontal) between the first and last node of the fractal (assuming the first segment is horizontal)
+def angle_of_slope(point_1,point_2):
+    if point_2[0]-point_1[0] == 0:
+        return 1/2*math.pi
+    else:
+        angle = math.atan((point_2[1]-point_1[1])/(point_2[0]-point_1[0]))
+        return (angle)
+
+
+def reflect_point (point, x_0, y_0, x_1, y_1): #where x_0,y0 and x_1,y_1 are endpoints of the line
+    dx = x_1 - x_0
+    dy = y_1 - y_0
+    a = (dx*dx-dy*dy)/(dx*dx+dy*dy)
+    b = (2*dx*dy)/(dx*dx+dy*dy)
+    
+    x_2 = a*(point[0]-x_0)+b*(point[1]-y_0)+x_0
+    y_2 = b*(point[0]-x_0)-a*(point[1]-y_0)+y_0
+    return([x_2,y_2])
+
+def horizontal_flip(coords):
+    
+    midpoint = [(coords[0][0][0]+coords[-1][0][0])/2,(coords[0][0][1]-coords[-1][0][1])/2]
+    slope = [coords[-1][0][0]-coords[0][0][0],coords[-1][0][1]+coords[0][0][1]]
+    
+    x_0,y_0 = midpoint[0]+slope[1],midpoint[1]-slope[0]
+    x_1,y_1 = midpoint[0]-slope[1],midpoint[1]+slope[0]
+    for flips in range(len(coords)):
+        coords[flips][0] = reflect_point(coords[flips][0],x_0,y_0,x_1,y_1)
+    return(coords)
+    
+def vertical_flip(coords):
+    
+    x_0,y_0 = coords[0][0][0],coords[0][0][1]
+    x_1,y_1 = coords[-1][0][0],coords[-1][0][1]
+    for flips in range(len(coords)):
+        coords[flips][0] = reflect_point(coords[flips][0],x_0,y_0,x_1,y_1)
+    return(coords)
+        
+#replaces a segment of a fractal with the original fractal
+def replace_segments(fractal,original_fractal,coords,original_coords):
+    new_fractal = []
+    new_gen = []
+
+    for lines in range(len(coords)-1):
+        temp_gen = copy.deepcopy(original_fractal)
+        new_coords = copy.deepcopy(original_coords)
+        x_shift = new_coords[0][0][0]
+        y_shift = new_coords[0][0][1]
+        for i in range(len(new_coords)):
+            new_coords[i][0]=[new_coords[i][0][0]-x_shift,new_coords[i][0][1]-y_shift]
+        
+        angle = -angle_of_slope(coords[lines][0],coords[lines+1][0])+ angle_of_slope(new_coords[0][0],new_coords[-1][0])
+        if coords[lines][0][0]-coords[lines+1][0][0] > 0 and coords[lines][0][1]-coords[lines+1][0][1]<0:
+            angle += math.pi
+        rotation_matrix = [[math.cos(angle),-1*math.sin(angle)],
+                          [math.sin(angle),math.cos(angle)]]
+        
+
+        
+        
+        for points in range(len(new_coords)):
+            for vals in range(2):
+                
+                #scale the coordinates so that the two endpoints are the right distance apart
+                new_coords[points][0][vals] = new_coords[points][0][vals]*(distance_of_coords(coords[0][0],coords[1][0])/endpoints_distance(original_coords))
+            
+            #Rotate fractal so that endpoints match segment
+            new_coords[points]=multiply_matrix(new_coords[points],rotation_matrix)
+            
+            #Four possible orientation for fractal on seg (based on flips of seg)
+            #treat flip as rotation over perp or par line
+        if fractal[lines][1][1]==-1:
+            new_coords = vertical_flip(new_coords)
+        if fractal[lines][1][0] == -1:
+            new_coords = horizontal_flip(new_coords)
+            new_coords = list(reversed(new_coords))
+            
+        #shift segment over to line it's replacing
+        x_shift = coords[lines][0][0]-new_coords[0][0][0]
+        y_shift = coords[lines][0][1]-new_coords[0][0][1]
+        if lines != 0: del new_coords[0]
+        for i in range(len(new_coords)):
+            new_coords[i][0]=[new_coords[i][0][0]+x_shift,new_coords[i][0][1]+y_shift]        
+            new_fractal.append([[new_coords[i][0][0],new_coords[i][0][1]]])
+            
+        for info in temp_gen:
+            new_gen.append(info)
+    return(new_fractal,new_gen)
+
+
+
+temp_new = replace_segments(fractal_gen,fractal_gen, fractal_coords, fractal_coords)
+final_coords = temp_new[0]
+final_gen = temp_new[1]
+x_coords = []
+y_coords = []
+for xys in final_coords:
+    x_coords.append(xys[0][0])
+    y_coords.append(xys[0][1])
+
+plt.scatter(x_coords,y_coords)
+plt.plot(x_coords,y_coords)
+
+for i in range(2):
+    temp_new = replace_segments(final_gen,fractal_gen, final_coords, fractal_coords)
+    final_coords = temp_new[0]
+    final_gen = temp_new[1]
+    
+    x_coords = []
+    y_coords = []
+    for xys in final_coords:
+        x_coords.append(xys[0][0])
+        y_coords.append(xys[0][1])
+    
+    plt.scatter(x_coords,y_coords)
+    plt.plot(x_coords,y_coords)
+
